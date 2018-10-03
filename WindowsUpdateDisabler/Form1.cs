@@ -14,9 +14,15 @@ namespace WindowsUpdateDisabler
     {
         private string LogMessage = "";
         private bool IsMute;
+
         public frmMain()
         {
             InitializeComponent();
+            
+        }
+
+        private void frmMain_Load(object sender, EventArgs e)
+        {
             backgroundWorker1.WorkerReportsProgress = true;
             backgroundWorker1.WorkerSupportsCancellation = true;
         }
@@ -27,18 +33,57 @@ namespace WindowsUpdateDisabler
             {
                 lblStatus.Text = "Running";
                 txtLog.Text += "--- Application Started ---" + Environment.NewLine;
+                backgroundWorker1.WorkerReportsProgress = true;
                 backgroundWorker1.RunWorkerAsync();
+            }
+
+        }
+
+        private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
+        {
+            BackgroundWorker worker = sender as BackgroundWorker;
+
+            while (!worker.CancellationPending)
+            {
+
+                WindowsServiceMonitor windowsServiceMonitor = new WindowsServiceMonitor("Windows Update");
+
+                LogMessage = "wait";
+                worker.ReportProgress(25);
+                windowsServiceMonitor.WaitForStart();
+                if (worker.CancellationPending)
+                {
+                    e.Cancel = true;
+                    break;
+                }
+
+                LogMessage = "start";
+                worker.ReportProgress(50);
+
+                if (windowsServiceMonitor.IsRunning)
+                {
+                    windowsServiceMonitor.Stop();
+                    if (!IsMute)
+                    {
+                        Console.Beep(1000, 250);
+                        Console.Beep(1000, 250);
+                    }
+                    LogMessage = "stop";
+                    worker.ReportProgress(75);
+                }
+
+                if (!windowsServiceMonitor.IsDisabled)
+                {
+                    windowsServiceMonitor.Disable();
+                    LogMessage = "disable";
+                    worker.ReportProgress(100);
+                }
             }
         }
 
-        private void btnStop_Click(object sender, EventArgs e)
+        private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
-            if (backgroundWorker1.WorkerSupportsCancellation)
-            {
-                backgroundWorker1.CancelAsync();
-                lblStatus.Text = "Stopped";
-                txtLog.Text += "--- Application Stopped ---" + Environment.NewLine;
-            }
+            Log(LogMessage);
         }
 
         public void Log(string message)
@@ -76,64 +121,10 @@ namespace WindowsUpdateDisabler
             }
         }
 
-        private void backgroundWorker1_DoWork(object sender, DoWorkEventArgs e)
-        {
-            BackgroundWorker worker = sender as BackgroundWorker;
-
-            while (true)
-            {
-                if (worker.CancellationPending)
-                {
-                    e.Cancel = true;
-                    break;
-                }
-                else
-                {
-                    WindowsServiceMonitor windowsServiceMonitor = new WindowsServiceMonitor("Windows Update");
-
-                    LogMessage = "wait";
-                    worker.ReportProgress(25);
-                    windowsServiceMonitor.WaitForStart();
-                    if (worker.CancellationPending)
-                    {
-                        e.Cancel = true;
-                        break;
-                    }
-                    else
-                    {
-                        LogMessage = "start";
-                        worker.ReportProgress(50);
-
-                        if (windowsServiceMonitor.IsRunning)
-                        {
-                            windowsServiceMonitor.Stop();
-                            if (!IsMute)
-                            {
-                                Console.Beep(1000, 250);
-                                Console.Beep(1000, 250);
-                            }
-                            LogMessage = "stop";
-                            worker.ReportProgress(75);
-                        }
-
-                        if (!windowsServiceMonitor.IsDisabled)
-                        {
-                            windowsServiceMonitor.Disable();
-                            LogMessage = "disable";
-                            worker.ReportProgress(100);
-                        }
-                    }
-                }
-            }
-        }
-
-        private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
-        {
-            Log(LogMessage);
-        }
-
         private void frmMain_Resize(object sender, EventArgs e)
         {
+            
+
             if (FormWindowState.Minimized == this.WindowState)
             {
                 notifyIcon1.Visible = true;
@@ -172,5 +163,22 @@ namespace WindowsUpdateDisabler
                 txtLog.Text += "--- Notification Beeb Enabled ---" + Environment.NewLine;
             }
         }
+
+        private void toolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        private void frmMain_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            if (backgroundWorker1.WorkerSupportsCancellation)
+            {
+                backgroundWorker1.CancelAsync();
+                backgroundWorker1.Dispose();
+                lblStatus.Text = "Stopped";
+                txtLog.Text += "--- Application Stopped ---" + Environment.NewLine;
+            }
+        }
+
     }
 }
